@@ -18,7 +18,7 @@
 #include "array.h"
 
 /**
- * 创建新数组
+ * Create new array
  */
 swArray *swArray_new(int page_size, size_t item_size)
 {
@@ -47,7 +47,7 @@ swArray *swArray_new(int page_size, size_t item_size)
 }
 
 /**
- * 销毁数组
+ * Destory the array
  */
 void swArray_free(swArray *array)
 {
@@ -61,7 +61,7 @@ void swArray_free(swArray *array)
 }
 
 /**
- * 扩展内存页面
+ * Extend the memory pages of the array
  */
 int swArray_extend(swArray *array)
 {
@@ -81,7 +81,7 @@ int swArray_extend(swArray *array)
 }
 
 /**
- * 获取某一个index的数据内容
+ * Fetch data by index of the array
  */
 void *swArray_fetch(swArray *array, uint32_t n)
 {
@@ -90,11 +90,11 @@ void *swArray_fetch(swArray *array, uint32_t n)
     {
         return NULL;
     }
-    return array->pages[page] + (swArray_offset(array, n) * array->item_size);
+    return (char*) array->pages[page] + (swArray_offset(array, n) * array->item_size);
 }
 
 /**
- * 追加到数组末尾
+ * Append to the array
  */
 int swArray_append(swArray *array, void *data)
 {
@@ -106,7 +106,7 @@ int swArray_append(swArray *array, void *data)
         return SW_ERR;
     }
     array->item_num++;
-    memcpy(array->pages[page] + (swArray_offset(array, n) * array->item_size), data, array->item_size);
+    memcpy((char*) array->pages[page] + (swArray_offset(array, n) * array->item_size), data, array->item_size);
     return n;
 }
 
@@ -119,7 +119,7 @@ int swArray_store(swArray *array, uint32_t n, void *data)
         swWarn("fetch index[%d] out of array", n);
         return SW_ERR;
     }
-    memcpy(array->pages[page] + (swArray_offset(array, n) * array->item_size), data, array->item_size);
+    memcpy((char*) array->pages[page] + (swArray_offset(array, n) * array->item_size), data, array->item_size);
     return SW_OK;
 }
 
@@ -139,7 +139,7 @@ void *swArray_alloc(swArray *array, uint32_t n)
         swWarn("fetch index[%d] out of array", n);
         return NULL;
     }
-    return array->pages[page] + (swArray_offset(array, n) * array->item_size);
+    return (char*) array->pages[page] + (swArray_offset(array, n) * array->item_size);
 }
 
 void swArray_clear(swArray *array)

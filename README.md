@@ -1,5 +1,6 @@
 Swoole
 ======
+[![Backers on Open Collective](https://opencollective.com/swoole-src/backers/badge.svg)](#backers) [![Sponsors on Open Collective](https://opencollective.com/swoole-src/sponsors/badge.svg)](#sponsors) [![Latest Version](https://img.shields.io/github/release/swoole/swoole-src.svg?style=flat-square)](https://github.com/swoole/swoole-src/releases)
 [![Build Status](https://api.travis-ci.org/swoole/swoole-src.svg)](https://travis-ci.org/swoole/swoole-src)
 [![License](https://img.shields.io/badge/license-apache2-blue.svg)](LICENSE)
 [![Join the chat at https://gitter.im/swoole/swoole-src](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/swoole/swoole-src?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
@@ -7,27 +8,36 @@ Swoole
 
 Swoole is an event-driven asynchronous & concurrent networking communication framework with high performance written only in C for PHP.
 
-__Document__: <https://rawgit.com/tchiotludo/swoole-ide-helper/english/docs/index.html>
+* __Document__: <https://www.swoole.co.uk/docs/>
+* __API__: <https://rawgit.com/tchiotludo/swoole-ide-helper/english/docs/index.html>
+* __IDE Helper__: <https://github.com/swoole/ide-helper>
+* __中文文档__: <http://wiki.swoole.com/>
+* __Twitter__: <https://twitter.com/php_swoole>
+* __Slack Group__: <https://swoole.slack.com/>
 
-__IDE Helper__: <https://github.com/swoole/ide-helper>
+Swoft
+----
+A modern, high performance AOP and coroutine PHP framework. <https://github.com/swoft-cloud>
 
-__中文文档__: <http://wiki.swoole.com/>
+EasySwoole
+----
+A simple, high performance PHP framework, based on Swoole, which makes using Swoole as easy as `echo hello world`. <https://www.easyswoole.com/>
 
-__IRC__:  <https://gitter.im/swoole/swoole-src>
+SwooleDistributed
+-----------------
+A high performance cooperative server framework based on all versions of Swoole, supporting microservice and cluster deployment, and providing developers with many advanced development and debugging components. <https://github.com/SwooleDistributed/SwooleDistributed>
 
-
-event-based
+Event-based
 ------
-
 The network layer in Swoole is event-based and takes full advantage of the underlaying epoll/kqueue implementation, making it really easy to serve thousands of connections.
 
-coroutine
+Coroutine
 ----------------
-[Swoole 2.0](Version2.md) supports the built-in coroutine, and you can use fully synchronized code to implement asynchronous programs. PHP code without any additional keywords, the underlying automatic coroutine-scheduling.
+[Swoole 2.0](Version2.md) or later supports the built-in coroutine, and you can use fully synchronized code to implement asynchronous programs. PHP code without any additional keywords, the underlying automatic coroutine-scheduling.
 
 ```php
 <?php
-for($i = 0; $i < 100; $i++) {
+for ($i = 0; $i < 100; $i++) {
     Swoole\Coroutine::create(function() use ($i) {
         $redis = new Swoole\Coroutine\Redis();
         $res = $redis->connect('127.0.0.1', 6379);
@@ -50,15 +60,14 @@ for($i = 0; $i < 100; $i++) {
 $server = new Swoole\Http\Server('127.0.0.1', 9501);
 
 $server->on('Request', function($request, $response) {
-
     $tcp_cli = new Swoole\Coroutine\Client(SWOOLE_SOCK_TCP);
-    $ret = $tcp_cli->connect('127.0.0.1', 9906);
-    $tcp_cli ->send('test for the coro');
+    $tcp_cli->connect('127.0.0.1', 9906);
+    $tcp_cli->send('test for the coroutine');
     $ret = $tcp_cli->recv(5);
     $tcp_cli->close();
 
     if ($ret) {
-        $response->end(" swoole response is ok");
+        $response->end(' swoole response is ok');
     }
     else{
         $response->end(" recv failed error : {$client->errCode}");
@@ -68,16 +77,104 @@ $server->on('Request', function($request, $response) {
 $server->start();
 ```
 
-concurrent
-------
+Short API Name
+-----
+#### start a new coroutine
+```php
+go(function () {
+    co::sleep(0.5);
+    echo "hello";
+});
+go("test");
+go([$object, "method"]);
+```
 
+#### Channel
+```php
+$chan = new chan(128);
+$chan->push(1234);
+$chan->push(1234.56);
+$chan->push("hello world");
+$chan->push(["hello world"]);
+$chan->push(new stdclass);
+$chan->push(fopen("test.txt", "r+"));
+while($chan->pop());
+```
+
+#### MySQL Client
+```php
+go(function () {
+    $db = new Co\MySQL();
+    $server = array(
+        'host' => '127.0.0.1',
+        'user' => 'root',
+        'password' => 'root',
+        'database' => 'test',
+    );
+
+    $db->connect($server);
+
+    $result = $db->query('SELECT * FROM userinfo WHERE id = 3');
+    var_dump($result);
+});
+```
+
+#### Redis Client
+```php
+go(function () {
+    $redis = new Co\Redis;
+    $res = $redis->connect('127.0.0.1', 6379);
+    $ret = $redis->set('key', 'value');
+    var_dump($redis->get('key'));
+});
+```
+
+#### Http Client
+```php
+go(function () {
+    $http = new Co\Http\Client("www.google.com", 443, true);
+    $http->setHeaders(function () {
+
+    });
+    $ret = $http->get('/');
+    var_dump($http->body);
+});
+```
+
+#### Http2 Client
+```php
+go(function () {
+    $http = new Co\Http2\Client("www.google.com", 443, true);
+    $req = new co\Http2\Request;
+    $req->path = "/index.html";
+    $req->headers = [
+        'host' => "www.google.com",
+        "user-agent" => 'Chrome/49.0.2587.3',
+        'accept' => 'text/html,application/xhtml+xml,application/xml',
+        'accept-encoding' => 'gzip',
+    ];
+    $req->cookies = ['name' => 'rango', 'email' => 'rango@swoole.com'];
+    $ret = $http->send($req);
+    var_dump($http->recv());
+});
+```
+
+#### Other
+```php
+co::sleep(100);
+co::fread($fp);
+co::gethostbyname('www.google.com');
+```
+
+
+Concurrent
+------
 On the request processing part, Swoole uses a multi-process model. Every process works as a worker. All business logic is executed in workers, synchronously.
 
 With the synchronous logic execution, you can easily write large and robust applications and take advantage of almost all libraries available to the PHP community.
 
-in-memory
+In-memory
 ------
-
 Unlike traditional apache/php-fpm stuff, the memory allocated in Swoole will not be freed after a request, which can improve performance a lot.
 
 
@@ -87,17 +184,20 @@ Traditional PHP applications almost always run behind Apache/Nginx, without much
 
 1. All memory will be freed after the request. All PHP code needs be re-compiled on every request. Even with opcache enabled, all opcode still needs to be re-executed.
 2. It is almost impossible to implement long connections and connection pooling techniques.
-3. Implementing asynchronous tasks requires 3rd party queue servers, such as rabbitmq and beanstalkd.
-4. Implementing realtime applications such as chatting servers requires 3rd party languages, such as nodejs, for example.
+3. Implementing asynchronous tasks requires third-party queue servers, such as rabbitmq and beanstalkd.
+4. Implementing realtime applications such as chatting servers requires third-party languages, such as nodejs, for example.
 
 This is why Swoole appeared. Swoole extends the use cases of PHP, and brings all these possibilities to the PHP world.
 By using Swoole, you can build enhanced web applications with more control, real-time chatting servers, etc, more easily.
 
 ## Requirements
 
-* PHP 5.3.10 or later
-* Linux, OS X and basic Windows support (Thanks to cygwin)
+* Version 1.x: PHP 5.3.10 or later
+* Version 2.x: PHP 7.0.0 or later
+* Version 4.x: PHP 7.0.0 or later
+* Linux, OS X and basic Windows support (thanks to CygWin)
 * GCC 4.4 or later
+* GCC 4.8 or later (Version >= 4)
 
 ## Installation
 
@@ -110,18 +210,27 @@ By using Swoole, you can build enhanced web applications with more control, real
 2. Install from source
 
     ```
-    sudo apt-get install php5-dev
+    sudo apt-get install php7-dev
     git clone https://github.com/swoole/swoole-src.git
     cd swoole-src
     phpize
     ./configure
     make && make install
     ```
+3. Example for static compile:
+    ```
+    git clone -b PHP-7.2 --depth 1 https://github.com/php/php-src.git
+    cd php-src/
+    git clone -b master --depth 1 https://github.com/swoole/swoole-src.git ext/swoole
+    ./buildconf --force
+    ./configure --prefix=/usr/local/php7 --disable-all --enable-cli --disable-cgi --disable-fpm --disable-phpdbg --enable-bcmath --enable-hash --enable-json --enable-mbstring --enable-mbregex --enable-mbregex-backtrack --enable-sockets --enable-pdo --with-sodium --with-password-argon2 --with-sqlite3 --with-pdo-sqlite --with-pcre-regex --with-zlib --with-openssl-dir --enable-swoole-static --enable-openssl --with-swoole
+    time make -j `cat /proc/cpuinfo | grep processor | wc -l`
+    sudo make install
+    ```
 
 ## Introduction
 
-Swoole includes components for different purposes: Server, Task Worker, Timer, Event and Async IO. With these components,
-Swoole allows you to build many features.
+Swoole includes components for different purposes: Server, Task Worker, Timer, Event and Async IO. With these components, Swoole allows you to build many features.
 
 ### Server
 
@@ -131,16 +240,17 @@ With Swoole server, you can build web servers, chat messaging servers, game serv
 The following example shows a simple echo server.
 
 ```php
-// create a server instance
-$serv = new swoole_server("127.0.0.1", 9501);
+// Create a server instance
+$serv = new swoole_server('127.0.0.1', 9501);
 
-// attach handler for connect event, once client connected to server the registered handler will be executed
-$serv->on('connect', function ($serv, $fd){
+// Attach handler for connect event. Once the client has connected to the server, the registered handler will be
+// executed.
+$serv->on('connect', function ($serv, $fd) {
     echo "Client:Connect.\n";
 });
 
-// attach handler for receive event, every piece of data received by server, the registered handler will be
-// executed. And all custom protocol implementation should be located there.
+// Attach handler for receive event. Every piece of data will be received by server and the registered handler will be
+// executed. All custom protocol implementation should be located there.
 $serv->on('receive', function ($serv, $fd, $from_id, $data) {
     $serv->send($fd, $data);
 });
@@ -149,20 +259,20 @@ $serv->on('close', function ($serv, $fd) {
     echo "Client: Close.\n";
 });
 
-// start our server, listen on port and be ready to accept connections
+// Start our server, listen on the port and be ready to accept connections.
 $serv->start();
 ```
 
 Try to extend your server and implement what you want!
 
-### Http Server
+### HTTP Server
 
 ```php
-$http = new swoole_http_server("0.0.0.0", 9501);
+$http = new swoole_http_server('0.0.0.0', 9501);
 
 $http->on('request', function ($request, $response) {
-    $response->header("Content-Type", "text/html; charset=utf-8");
-    $response->end("<h1>Hello Swoole. #".rand(1000, 9999)."</h1>");
+    $response->header('Content-Type', 'text/html; charset=utf-8');
+    $response->end('<h1>Hello Swoole. #' . rand(1000, 9999) . '</h1>');
 });
 
 $http->start();
@@ -171,7 +281,7 @@ $http->start();
 ### WebSocket Server
 
 ```php
-$ws = new swoole_websocket_server("0.0.0.0", 9502);
+$ws = new swoole_websocket_server('0.0.0.0', 9502);
 
 $ws->on('open', function ($ws, $request) {
     var_dump($request->fd, $request->get, $request->server);
@@ -194,11 +304,11 @@ $ws->start();
 ```php
 $db = new swoole_mysql('127.0.0.1', 'root', 'root', 'test');
 
-$db->on("close", function($o){
+$db->on('close', function($o) {
     echo "mysql connection is closed\n";
 });
 
-$db->query("select now() as now_t", function($db, $result_rows){
+$db->query('select now() as now_t', function($db, $result_rows) {
     var_dump($result_rows);
     $db->close();
 });
@@ -226,12 +336,10 @@ $client->connect('127.0.0.1', 6379, function (swoole_redis $client, $result) {
 ```php
 $cli = new swoole_http_client('127.0.0.1', 80);
 
-$cli->setHeaders(['User-Agent' => "swoole"]);
-$cli->post('/dump.php', array("test" => '9999999'), function (swoole_http_client $cli)
-{
+$cli->setHeaders(['User-Agent' => 'swoole']);
+$cli->post('/dump.php', array('test' => '9999999'), function (swoole_http_client $cli) {
     echo "#{$cli->sock}\tPOST response Length: " . strlen($cli->body) . "\n";
-    $cli->get('/index.php', function (swoole_http_client $cli)
-    {
+    $cli->get('/index.php', function (swoole_http_client $cli) {
         echo "#{$cli->sock}\tGET response Length: " . strlen($cli->body) . "\n";
     });
 });
@@ -248,7 +356,7 @@ $cli->on('message', function ($_cli, $frame) {
 
 $cli->upgrade('/', function ($cli) {
     echo $cli->body;
-    $cli->push("hello world");
+    $cli->push('Hello world');
 });
 ```
 
@@ -256,16 +364,16 @@ $cli->upgrade('/', function ($cli) {
 ### Multi-port and mixed protocol
 
 ```php
-$serv = new swoole_http_server("127.0.0.1", 9501, SWOOLE_BASE);
+$serv = new swoole_http_server('127.0.0.1', 9501, SWOOLE_BASE);
 
-$port2 = $serv->listen("0.0.0.0", 9502, SWOOLE_SOCK_TCP);
+$port2 = $serv->listen('0.0.0.0', 9502, SWOOLE_SOCK_TCP);
 $port2->on('receive', function (swoole_server $serv, $fd, $from_id, $data) {
     var_dump($data);
     $serv->send($fd, $data);
 });
 
 $serv->on('request', function($req, $resp) {
-    $resp->end("<h1>Hello World</h1>");
+    $resp->end('<h1>Hello world</h1>');
 });
 
 
@@ -278,7 +386,7 @@ Swoole brings you two types of workers: server workers and task workers. Server 
 handling, as demonstrated above. Task workers are for task execution. With task workers, we can execute our
 task asynchronously without blocking the server workers.
 
-Task workers are mainly used for time-consuming tasks, such as sending password recovery emails. And ensure
+Task workers are mainly used for time-consuming tasks, such as sending password recovery emails, and ensure
 the main request returns as soon as possible.
 
 The following example shows a simple server with task support.
@@ -286,29 +394,29 @@ The following example shows a simple server with task support.
 ```php
 $serv = new swoole_server("127.0.0.1", 9502);
 
-// sets server configuration, we set task_worker_num config greater than 0 to enable task workers support
+// Sets server configuration, we set task_worker_num config greater than 0 to enable task workers support
 $serv->set(array('task_worker_num' => 4));
 
-// attach handler for receive event, which have explained above.
+// Attach handler for receive event, which has been explained above.
 $serv->on('receive', function($serv, $fd, $from_id, $data) {
-    // we dispath a task to task workers by invoke the task() method of $serv
-    // this method returns a task id as the identity of ths task
+    // We dispath a task to task workers by invoke the task() method of $serv
+    // This method returns a task id as the identity of ths task
     $task_id = $serv->task($data);
     echo "Dispath AsyncTask: id=$task_id\n";
 });
 
-// attach handler for task event, the handler will be executed in task workers.
+// Attach handler for task event. The handler will be executed in task workers.
 $serv->on('task', function ($serv, $task_id, $from_id, $data) {
-    // handle the task, do what you want with $data
-    echo "New AsyncTask[id=$task_id]".PHP_EOL;
+    // Handle the task and do what you want with $data
+    echo "New AsyncTask[id=$task_id]" . PHP_EOL;
 
-    // after the task task is handled, we return the results to caller worker.
+    // After the task is handled, we return the results to the caller worker.
     $serv->finish("$data -> OK");
 });
 
-// attach handler for finish event, the handler will be executed in server workers, the same worker dispatched this task before.
+// Attach handler for finish event. The handler will be executed in server workers. The same worker dispatched this task before.
 $serv->on('finish', function ($serv, $task_id, $data) {
-    echo "AsyncTask[$task_id] Finish: $data".PHP_EOL;
+    echo "AsyncTask[$task_id] Finish: $data" . PHP_EOL;
 });
 
 $serv->start();
@@ -320,7 +428,7 @@ complete before it returns its response.
 
 ### Timer
 
-Swoole has built in millisecond timer support. By using the timer, it is easy to get a block of code
+Swoole has built-in millisecond timer support. By using the timer, it is easy to get a block of code
 executed periodically (really useful for managing interval tasks).
 
 To demonstrate how the timer works, here is a small example:
@@ -358,7 +466,7 @@ bool swoole_event_set($fd, mixed $read_callback, mixed $write_callback, int $fla
 bool swoole_event_del($fd);
 ```
 
-The `$fid` parameter can be one of the following types:
+The `$fd` parameter can be one of the following types:
 
 * unix file descriptor
 * stream resource created by `stream_socket_client()/fsockopen()`
@@ -391,47 +499,44 @@ Refer to [API Reference](http://wiki.swoole.com/wiki/page/183.html) for more det
 
 ### Client
 
-Swoole also provides a Client component to build tcp/udp clients in both asynchronous and synchronous ways.
+Swoole also provides a client component to build tcp/udp clients in both asynchronous and synchronous ways.
 Swoole uses the `swoole_client` class to expose all its functionalities.
 
-synchronous blocking:
+Synchronous blocking:
 ```php
 $client = new swoole_client(SWOOLE_SOCK_TCP);
-if (!$client->connect('127.0.0.1', 9501, 0.5))
-{
-    die("connect failed.");
+if (!$client->connect('127.0.0.1', 9501, 0.5)) {
+    die('connect failed.');
 }
 
-if (!$client->send("hello world"))
-{
-    die("send failed.");
+if (!$client->send('Hello world')) {
+    die('send failed.');
 }
 
 $data = $client->recv();
-if (!$data)
-{
-    die("recv failed.");
+if (!$data) {
+    die('recv failed.');
 }
 
 $client->close();
 
 ```
 
-asynchronous nonblocking:
+Asynchronous non-blocking:
 
 ```php
 $client = new swoole_client(SWOOLE_SOCK_TCP, SWOOLE_SOCK_ASYNC);
 
-$client->on("connect", function($cli) {
-    $cli->send("hello world\n");
+$client->on('connect', function($cli) {
+    $cli->send("Hello world\n");
 });
-$client->on("receive", function($cli, $data){
+$client->on('receive', function($cli, $data) {
     echo "Received: ".$data."\n";
 });
-$client->on("error", function($cli){
+$client->on('error', function($cli) {
     echo "Connect failed\n";
 });
-$client->on("close", function($cli){
+$client->on('close', function($cli) {
     echo "Connection close\n";
 });
 
@@ -458,10 +563,6 @@ Refer to [API Reference](http://wiki.swoole.com/wiki/page/3.html) for more detai
 * [中文](http://wiki.swoole.com/)
 * [English](https://rawgit.com/tchiotludo/swoole-ide-helper/english/docs/index.html)
 
-## Related Projects
-
-* [SwooleFramework](https://github.com/swoole/framework) Web framework powered by Swoole
-
 ## Contribution
 
 Your contribution to Swoole development is very welcome!
@@ -471,6 +572,36 @@ You may contribute in the following ways:
 * [Repost issues and feedback](https://github.com/swoole/swoole-src/issues)
 * Submit fixes, features via Pull Request
 * Write/polish documentation
+
+## Contributors
+
+This project exists thanks to all the people who contribute. [[Contribute](https://github.com/swoole/swoole-src/graphs/contributors)].
+<a href="https://github.com/swoole/swoole-src/graphs/contributors"><img src="https://opencollective.com/swoole-src/contributors.svg?width=890&button=false" /></a>
+
+
+## Backers
+
+Thank you to all our backers! 🙏 [[Become a backer](https://opencollective.com/swoole-src#backer)]
+
+<a href="https://opencollective.com/swoole-src#backers" target="_blank"><img src="https://opencollective.com/swoole-src/backers.svg?width=890"></a>
+
+
+## Sponsors
+
+Support this project by becoming a sponsor. Your logo will show up here with a link to your website. [[Become a sponsor](https://opencollective.com/swoole-src#sponsor)]
+
+<a href="https://opencollective.com/swoole-src/sponsor/0/website" target="_blank"><img src="https://opencollective.com/swoole-src/sponsor/0/avatar.svg"></a>
+<a href="https://opencollective.com/swoole-src/sponsor/1/website" target="_blank"><img src="https://opencollective.com/swoole-src/sponsor/1/avatar.svg"></a>
+<a href="https://opencollective.com/swoole-src/sponsor/2/website" target="_blank"><img src="https://opencollective.com/swoole-src/sponsor/2/avatar.svg"></a>
+<a href="https://opencollective.com/swoole-src/sponsor/3/website" target="_blank"><img src="https://opencollective.com/swoole-src/sponsor/3/avatar.svg"></a>
+<a href="https://opencollective.com/swoole-src/sponsor/4/website" target="_blank"><img src="https://opencollective.com/swoole-src/sponsor/4/avatar.svg"></a>
+<a href="https://opencollective.com/swoole-src/sponsor/5/website" target="_blank"><img src="https://opencollective.com/swoole-src/sponsor/5/avatar.svg"></a>
+<a href="https://opencollective.com/swoole-src/sponsor/6/website" target="_blank"><img src="https://opencollective.com/swoole-src/sponsor/6/avatar.svg"></a>
+<a href="https://opencollective.com/swoole-src/sponsor/7/website" target="_blank"><img src="https://opencollective.com/swoole-src/sponsor/7/avatar.svg"></a>
+<a href="https://opencollective.com/swoole-src/sponsor/8/website" target="_blank"><img src="https://opencollective.com/swoole-src/sponsor/8/avatar.svg"></a>
+<a href="https://opencollective.com/swoole-src/sponsor/9/website" target="_blank"><img src="https://opencollective.com/swoole-src/sponsor/9/avatar.svg"></a>
+
+
 
 ## License
 

@@ -21,9 +21,8 @@
 extern "C"
 {
 #endif
-#if PHP_MAJOR_VERSION >= 7
 
-#define SERIA_SIZE 1024
+#define SERIA_SIZE 4096
 #define FILTER_SIZE 1024
 
 typedef struct _seriaString
@@ -66,7 +65,6 @@ typedef struct _swPoolstr
 
 #pragma pack ()
 
-struct _swSeriaG swSeriaG;
 
 static void *unser_start = 0;
 static swPoolstr mini_filter[FILTER_SIZE];
@@ -108,11 +106,12 @@ static swPoolstr *bigger_filter = NULL;
 
 #define SW_FAST_PACK                  1
 
-#endif
+#define UNSERIALIZE_OBJECT_TO_ARRAY          1
+#define UNSERIALIZE_OBJECT_TO_STDCLASS       2
+
 
 #ifdef	__cplusplus
 }
 #endif
 
 #endif	/* SERIALIZE_H */
-

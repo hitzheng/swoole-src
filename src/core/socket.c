@@ -15,11 +15,9 @@
  */
 
 #include "swoole.h"
+#include "connection.h"
 
-#include <sys/stat.h>
-#include <sys/poll.h>
-
-int swSocket_sendfile_sync(int sock, char *filename, off_t offset, double timeout)
+int swSocket_sendfile_sync(int sock, char *filename, off_t offset, size_t length, double timeout)
 {
     int timeout_ms = timeout < 0 ? -1 : timeout * 1000;
     int file_fd = open(filename, O_RDONLY);
@@ -29,18 +27,24 @@ int swSocket_sendfile_sync(int sock, char *filename, off_t offset, double timeou
         return SW_ERR;
     }
 
-    struct stat file_stat;
-    if (fstat(file_fd, &file_stat) < 0)
+    if (length == 0)
     {
-        swWarn("fstat() failed. Error: %s[%d]", strerror(errno), errno);
-        close(file_fd);
-        return SW_ERR;
+        struct stat file_stat;
+        if (fstat(file_fd, &file_stat) < 0)
+        {
+            swWarn("fstat() failed. Error: %s[%d]", strerror(errno), errno);
+            close(file_fd);
+            return SW_ERR;
+        }
+        length = file_stat.st_size;
+    }
+    else
+    {
+        length = offset + length;
     }
 
     int n, sendn;
-    size_t file_size = file_stat.st_size;
-
-    while (offset < file_size)
+    while (offset < length)
     {
         if (swSocket_wait(sock, timeout_ms, SW_EVENT_WRITE) < 0)
         {
@@ -49,7 +53,7 @@ int swSocket_sendfile_sync(int sock, char *filename, off_t offset, double timeou
         }
         else
         {
-            sendn = (file_size - offset > SW_SENDFILE_CHUNK_SIZE) ? SW_SENDFILE_CHUNK_SIZE : file_size - offset;
+            sendn = (length - offset > SW_SENDFILE_CHUNK_SIZE) ? SW_SENDFILE_CHUNK_SIZE : length - offset;
             n = swoole_sendfile(sock, file_fd, &offset, sendn);
             if (n <= 0)
             {
@@ -170,18 +174,14 @@ int swSocket_write_blocking(int __fd, void *__data, int __len)
 
     while (written < __len)
     {
-        n = write(__fd, __data + written, __len - written);
+        n = write(__fd, (char *) __data + written, __len - written);
         if (n < 0)
         {
             if (errno == EINTR)
             {
                 continue;
             }
-#ifdef HAVE_KQUEUE
-            else if (errno == EAGAIN || errno == ENOBUFS)
-#else
-            else if (errno == EAGAIN)
-#endif
+            else if (swConnection_error(errno) == SW_WAIT)
             {
                 swSocket_wait(__fd, SW_WORKER_WAIT_TIMEOUT, SW_EVENT_WRITE);
                 continue;
@@ -198,7 +198,32 @@ int swSocket_write_blocking(int __fd, void *__data, int __len)
     return written;
 }
 
-int swSocket_udp_sendto(int server_sock, char *dst_ip, int dst_port, char *data, uint32_t len)
+int swSocket_recv_blocking(int fd, void *__data, size_t __len, int flags)
+{
+    int ret;
+    size_t read_bytes = 0;
+
+    while (read_bytes != __len)
+    {
+        errno = 0;
+        ret = recv(fd, (char *) __data + read_bytes, __len - read_bytes, flags);
+        if (ret > 0)
+        {
+            read_bytes += ret;
+        }
+        else if (ret == 0 && errno == 0)
+        {
+            return read_bytes;
+        }
+        else if (ret <= 0 && errno != 0 && errno != EINTR)
+        {
+            return ret;
+        }
+    }
+    return read_bytes;
+}
+
+ssize_t swSocket_udp_sendto(int server_sock, char *dst_ip, int dst_port, char *data, uint32_t len)
 {
     struct sockaddr_in addr;
     if (inet_aton(dst_ip, &addr.sin_addr) == 0)
@@ -211,7 +236,7 @@ int swSocket_udp_sendto(int server_sock, char *dst_ip, int dst_port, char *data,
     return swSocket_sendto_blocking(server_sock, data, len, 0, (struct sockaddr *) &addr, sizeof(addr));
 }
 
-int swSocket_udp_sendto6(int server_sock, char *dst_ip, int dst_port, char *data, uint32_t len)
+ssize_t swSocket_udp_sendto6(int server_sock, char *dst_ip, int dst_port, char *data, uint32_t len)
 {
     struct sockaddr_in6 addr;
     bzero(&addr, sizeof(addr));
@@ -225,9 +250,19 @@ int swSocket_udp_sendto6(int server_sock, char *dst_ip, int dst_port, char *data
     return swSocket_sendto_blocking(server_sock, data, len, 0, (struct sockaddr *) &addr, sizeof(addr));
 }
 
-int swSocket_sendto_blocking(int fd, void *__buf, size_t __n, int flag, struct sockaddr *__addr, socklen_t __addr_len)
+#ifndef _WIN32
+ssize_t swSocket_unix_sendto(int server_sock, char *dst_path, char *data, uint32_t len)
 {
-    int n = 0;
+    struct sockaddr_un addr;
+    bzero(&addr, sizeof(addr));
+    strncpy(addr.sun_path, dst_path, sizeof(addr.sun_path));
+    return swSocket_sendto_blocking(server_sock, data, len, 0, (struct sockaddr *) &addr, sizeof(addr));
+}
+#endif
+
+ssize_t swSocket_sendto_blocking(int fd, void *__buf, size_t __n, int flag, struct sockaddr *__addr, socklen_t __addr_len)
+{
+    ssize_t n = 0;
 
     while (1)
     {
@@ -242,7 +277,7 @@ int swSocket_sendto_blocking(int fd, void *__buf, size_t __n, int flag, struct s
             {
                 continue;
             }
-            else if (errno == EAGAIN)
+            else if (swConnection_error(errno) == SW_WAIT)
             {
                 swSocket_wait(fd, 1000, SW_EVENT_WRITE);
                 continue;
@@ -301,14 +336,16 @@ int swSocket_bind(int sock, int type, char *host, int *port)
 
     struct sockaddr_in addr_in4;
     struct sockaddr_in6 addr_in6;
+#ifndef _WIN32
     struct sockaddr_un addr_un;
+#endif
     socklen_t len;
 
     //SO_REUSEADDR option
     int option = 1;
     if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(int)) < 0)
     {
-        swSysError("setsockopt(%d, SO_REUSEADDR) failed.", sock);
+        swoole_error_log(SW_LOG_WARNING, SW_ERROR_SYSTEM_CALL_FAIL, "setsockopt(%d, SO_REUSEADDR) failed.", sock);
     }
     //reuse port
 #ifdef HAVE_REUSEPORT
@@ -321,6 +358,8 @@ int swSocket_bind(int sock, int type, char *host, int *port)
         }
     }
 #endif
+
+#ifndef _WIN32
     //unix socket
     if (type == SW_SOCK_UNIX_DGRAM || type == SW_SOCK_UNIX_STREAM)
     {
@@ -331,7 +370,9 @@ int swSocket_bind(int sock, int type, char *host, int *port)
         ret = bind(sock, (struct sockaddr*) &addr_un, sizeof(addr_un));
     }
     //IPv6
-    else if (type > SW_SOCK_UDP)
+    else
+#endif
+	if (type > SW_SOCK_UDP)
     {
         bzero(&addr_in6, sizeof(addr_in6));
         inet_pton(AF_INET6, host, &(addr_in6.sin6_addr));
@@ -367,7 +408,7 @@ int swSocket_bind(int sock, int type, char *host, int *port)
     //bind failed
     if (ret < 0)
     {
-        swWarn("bind(%s:%d) failed. Error: %s [%d]", host, *port, strerror(errno), errno);
+        swoole_error_log(SW_LOG_WARNING, SW_ERROR_SYSTEM_CALL_FAIL, "bind(%s:%d) failed. Error: %s [%d]", host, *port, strerror(errno), errno);
         return SW_ERR;
     }
 
@@ -408,4 +449,53 @@ int swSocket_set_timeout(int sock, double timeout)
         return SW_ERR;
     }
     return SW_OK;
+}
+
+int swSocket_create_server(int type, char *address, int port, int backlog)
+{
+#if 0
+    int type;
+    char host[32];
+    int port = 0;
+
+    if (strncasecmp(address, "unix:/", 6) == 0)
+    {
+        address += 5;
+        type = SW_SOCK_UNIX_STREAM;
+    }
+    else
+    {
+        char *port_str = strchr(address, ':');
+        if (!port_str)
+        {
+            swoole_error_log(SW_LOG_ERROR, SW_ERROR_INVALID_PARAMS, "invalid address[%s]", address);
+            return SW_ERR;
+        }
+        type = SW_SOCK_TCP6;
+        memcpy(host, address, port_str - address);
+        host[port_str - address] = 0;
+        port = atoi(port_str + 1);
+        address = host;
+    }
+#endif
+
+    int fd = swSocket_create(type);
+    if (fd < 0)
+    {
+        swoole_error_log(SW_LOG_ERROR, SW_ERROR_SYSTEM_CALL_FAIL, "socket() failed. Error: %s[%d]", strerror(errno), errno);
+        return SW_ERR;
+    }
+
+    if (swSocket_bind(fd, type, address, &port) < 0)
+    {
+        return SW_ERR;
+    }
+
+    if (listen(fd, backlog) < 0)
+    {
+        swoole_error_log(SW_LOG_ERROR, SW_ERROR_SYSTEM_CALL_FAIL, "listen(%s:%d, %d) failed. Error: %s[%d]", address, port, backlog, strerror(errno), errno);
+        return SW_ERR;
+    }
+
+    return fd;
 }
